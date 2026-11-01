@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "1.1.1-lab.1"
+EXPECTED_VERSION = "1.1.1-lab.2"
 EXPECTED_TOOLS = {
     "youtube_video_get",
     "youtube_search",

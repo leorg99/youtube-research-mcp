@@ -31,10 +31,6 @@ const readOnlyAnnotations = {
   idempotentHint: true,
   openWorldHint: true,
 };
-const oauthMeta = {
-  securitySchemes: [{ type: "oauth2", scopes: ["youtube.read"] }],
-};
-
 const cursorSchema = z.string().min(1).optional();
 const limitSchema = z.number().int().min(1).max(100).default(10);
 const filtersSchema = z.record(z.string(), z.unknown()).default({});
@@ -715,6 +711,11 @@ export function createYoutubeMcpServer(
         "Read-only YouTube research. Use catalog resources for capabilities and schemas.",
     },
   );
+  const authMeta = {
+    securitySchemes: options.runtime?.authentication === "oauth2+static-bearer"
+      ? [{ type: "oauth2", scopes: ["youtube.read"] }]
+      : [{ type: "noauth" }],
+  };
   const service = options.service ?? new YouTubeService(config);
   const codec = new CursorCodec(config.cursorSecret, config.cursorTtlMs);
   let pager = responsePagers.get(service);
@@ -748,7 +749,7 @@ export function createYoutubeMcpServer(
         locale: z.string().default(""),
       }),
       annotations: readOnlyAnnotations,
-      _meta: oauthMeta,
+      _meta: authMeta,
     },
     async ({ video, view, options, cursor, limit, max_chars: maxChars, locale }) =>
       responsePager.run("youtube_video_get", { video, view, options, maxChars, locale }, cursor, limit, async () => {
@@ -961,7 +962,7 @@ export function createYoutubeMcpServer(
         locale: z.string().default(""),
       }),
       annotations: readOnlyAnnotations,
-      _meta: oauthMeta,
+      _meta: authMeta,
     },
     async ({ scope, query, within, filters, cursor, limit, locale }) =>
       (scope === "posts" ? postResponsePager : responsePager).run("youtube_search", { scope, query, within, filters, locale }, cursor, limit, async () => {
@@ -1245,7 +1246,7 @@ export function createYoutubeMcpServer(
           .default(["profile", "statistics", "branding", "uploads_playlist"]),
       }),
       annotations: readOnlyAnnotations,
-      _meta: oauthMeta,
+      _meta: authMeta,
     },
     async ({ channel, select }) =>
       runTool("youtube_channel_get", async () => {
@@ -1277,7 +1278,7 @@ export function createYoutubeMcpServer(
         limit: limitSchema,
       }),
       annotations: readOnlyAnnotations,
-      _meta: oauthMeta,
+      _meta: authMeta,
     },
     async ({ playlist, include_items: includeItems, cursor, limit }) =>
       responsePager.run("youtube_playlist_get", { playlist, includeItems }, cursor, limit, async () => {
@@ -1336,7 +1337,7 @@ export function createYoutubeMcpServer(
         options: filtersSchema, cursor: cursorSchema, limit: limitSchema,
         max_chars: z.number().int().min(256).max(12_000).default(4_000), locale: z.string().default(""),
       }),
-      annotations: readOnlyAnnotations, _meta: oauthMeta,
+      annotations: readOnlyAnnotations, _meta: authMeta,
     },
     async ({ post, view, options, cursor, limit, max_chars: maxChars, locale }) =>
       postResponsePager.run("youtube_post_get", { post, view, options, maxChars, locale }, cursor, limit, async () => {
