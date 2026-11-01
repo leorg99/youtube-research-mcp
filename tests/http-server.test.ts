@@ -33,7 +33,7 @@ describe("Streamable HTTP server", () => {
     expect(await health.json()).toMatchObject({
       ok: true,
       service: "youtube-mcp-aio",
-      version: "1.1.1-lab.1",
+      version: "1.1.1-lab.2",
     });
 
     const unauthorized = await fetch(`${handle.localUrl}/mcp`);
@@ -80,6 +80,32 @@ describe("Streamable HTTP server", () => {
         stdioClient.close(),
         stdioServer.close(),
       ]);
+    }
+  });
+
+  it("advertises noauth and dispatches tools without browser setup when HTTP auth is disabled", async () => {
+    handle = await startHttpServer(testAppConfig(), testRuntimeConfig({
+      accessToken: undefined,
+      allowUnauthenticated: true,
+    }));
+    const client = new Client({ name: "noauth-regression", version: "1" });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${handle.localUrl}/mcp`)));
+    try {
+      const root = await fetch(handle.localUrl);
+      expect(await root.json()).toMatchObject({ mcpAuthentication: "none" });
+      for (const tool of (await client.listTools()).tools) {
+        expect(tool._meta?.securitySchemes).toEqual([{ type: "noauth" }]);
+      }
+      const discovery = await fetch(`${handle.localUrl}/.well-known/oauth-protected-resource/mcp`);
+      expect(discovery.status).toBe(404);
+      expect(discovery.headers.get("www-authenticate")).toBeNull();
+      // Invalid arguments reach tool dispatch without contacting YouTube.
+      const result = await client.callTool({ name: "youtube_search", arguments: { query: "" } });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({ code: "INVALID_ARGUMENT" });
+      expect(result._meta?.["mcp/www_authenticate"]).toBeUndefined();
+    } finally {
+      await client.close();
     }
   });
 
@@ -249,7 +275,13 @@ describe("Streamable HTTP server", () => {
     });
     await client.connect(transport);
     try {
-      expect((await client.listTools()).tools).toHaveLength(5);
+      const tools = (await client.listTools()).tools;
+      expect(tools).toHaveLength(5);
+      for (const tool of tools) {
+        expect(tool._meta?.securitySchemes).toEqual([
+          { type: "oauth2", scopes: ["youtube.read"] },
+        ]);
+      }
     } finally {
       await client.close();
     }
