@@ -1,4 +1,4 @@
-import { YouTubeMcpError, errorMessage } from "../errors.js";
+import { YouTubeMcpError, errorMessage, type PublicErrorCode } from "../errors.js";
 import type { QuotaBucket, QuotaStore } from "../quota/quota-store.js";
 import type { ChannelReference } from "../utils/ids.js";
 import {
@@ -271,6 +271,49 @@ function normalizeChannel(item: ChannelItem): Record<string, unknown> {
   };
 }
 
+function apiFailure(
+  resource: string,
+  status: number,
+  payload: Record<string, unknown> | null,
+  apiKey: string,
+): YouTubeMcpError {
+  const value = payload?.error;
+  const provider = value !== null && typeof value === "object"
+    ? value as Record<string, unknown>
+    : {};
+  const entries = [provider.errors, provider.details].flatMap((entry) =>
+    Array.isArray(entry) ? entry : [],
+  );
+  const reasons = [...new Set(entries.map((entry: unknown) =>
+    entry !== null && typeof entry === "object" && "reason" in entry ? entry.reason : undefined,
+  ).filter((reason): reason is string => typeof reason === "string" && /^[\w.-]{1,128}$/.test(reason)))].slice(0, 20);
+  const authentication = reasons.some((reason) => reason.startsWith("API_KEY_")
+    || ["keyInvalid", "accessNotConfigured", "ipRefererBlocked", "SERVICE_DISABLED"].includes(reason));
+  const quota = reasons.some((reason) => /quota|rateLimit|dailyLimit/i.test(reason));
+  let code: PublicErrorCode = "UPSTREAM_ERROR";
+  const retryable = status === 408 || status === 429 || status >= 500;
+  if (status === 429 || quota) {
+    code = "RATE_LIMITED";
+  } else if (status === 401 || status === 403 || authentication) {
+    code = "AUTH_REQUIRED";
+  } else if (status === 400) {
+    code = "INVALID_ARGUMENT";
+  } else if (status === 404) {
+    code = "NOT_FOUND";
+  } else if (status === 408) {
+    code = "TIMEOUT";
+  }
+  const detail = typeof provider.message === "string"
+    ? provider.message.split(apiKey).join("[REDACTED]").slice(0, 1024)
+    : reasons.join(", ");
+  return new YouTubeMcpError(
+    code,
+    `YouTube Data API HTTP ${status}${detail ? `: ${detail}` : ""}`,
+    { resource, status, reasons },
+    code === "AUTH_REQUIRED" ? false : retryable,
+  );
+}
+
 export class YouTubeDataApiClient {
   private readonly baseUrl = "https://www.googleapis.com/youtube/v3";
 
@@ -309,15 +352,7 @@ export class YouTubeDataApiClient {
         if (response.ok) return payload as T;
 
         const retriable = response.status === 429 || response.status >= 500;
-        const message =
-          typeof payload?.error === "object" && payload.error !== null
-            ? JSON.stringify(payload.error)
-            : `HTTP ${response.status}`;
-        lastError = new YouTubeMcpError(
-          "YOUTUBE_API_ERROR",
-          `YouTube Data API request failed: ${message}`,
-          { resource, status: response.status },
-        );
+        lastError = apiFailure(resource, response.status, payload, this.apiKey);
         if (!retriable || attempt === 2) throw lastError;
       } catch (error) {
         lastError = error;
