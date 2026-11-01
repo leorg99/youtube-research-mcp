@@ -1,6 +1,6 @@
 {
   "name": "youtube-mcp-aio",
-  "version": "1.1.1",
+  "version": "1.1.1-lab.1",
   "description": "Unofficial read-only YouTube transcript, video, comment, channel, playlist, and search research.",
   "author": {
     "name": "BK927",
@@ -20,7 +20,7 @@
   ],
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "YouTube Research MCP Server — Transcripts, Search, Comments & Playlists",
+    "displayName": "YouTube Research MCP Server \u2014 Transcripts, Search, Comments & Playlists",
     "shortDescription": "Research YouTube transcripts, videos, comments, channels, and playlists.",
     "longDescription": "An unofficial read-only YouTube research plugin with five compact tools for video metadata, timestamped transcripts, comments, community posts, search, channels, playlists, trending, and quota-aware access.",
     "developerName": "BK927",

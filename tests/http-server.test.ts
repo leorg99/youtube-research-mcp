@@ -33,7 +33,7 @@ describe("Streamable HTTP server", () => {
     expect(await health.json()).toMatchObject({
       ok: true,
       service: "youtube-mcp-aio",
-      version: "1.1.1",
+      version: "1.1.1-lab.1",
     });
 
     const unauthorized = await fetch(`${handle.localUrl}/mcp`);
